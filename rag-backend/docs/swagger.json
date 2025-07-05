@@ -12,9 +12,220 @@
     "host": "localhost:8080",
     "basePath": "/",
     "paths": {
-        "/files": {
+        "/files/date-range": {
+            "get": {
+                "description": "Retrieves files created within the specified date range. Both start and end dates are inclusive.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "files"
+                ],
+                "summary": "Get files within a date range",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Start date in YYYY-MM-DD format (e.g., 2024-01-01)",
+                        "name": "start",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "End date in YYYY-MM-DD format (e.g., 2024-12-31)",
+                        "name": "end",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Files created within the date range",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/models.FileUploadRequest"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid date format",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Failed to retrieve files by date",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/files/getall": {
+            "get": {
+                "description": "Retrieves all files from the database. Returns a list of all files with their content and embeddings.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "files"
+                ],
+                "summary": "Get all files",
+                "responses": {
+                    "200": {
+                        "description": "List of all files",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/models.FileUploadRequest"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "No files found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/files/metadata": {
+            "get": {
+                "description": "Retrieves lightweight metadata for all files including ID, filename, size, and creation date. Does not include file content or embeddings for performance.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "files"
+                ],
+                "summary": "Get lightweight file metadata",
+                "responses": {
+                    "200": {
+                        "description": "List of file metadata",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/models.FileMetadata"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Failed to get metadata",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/files/recycle-bin": {
+            "get": {
+                "description": "Retrieves all files that have been soft-deleted (moved to recycle bin). These files can be restored or permanently deleted.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "files"
+                ],
+                "summary": "Get all soft-deleted files",
+                "responses": {
+                    "200": {
+                        "description": "List of soft-deleted files",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/models.FileUploadRequest"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Failed to fetch deleted files",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/files/search": {
+            "get": {
+                "description": "Searches for files whose filename contains the specified query string. Case-sensitive search.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "files"
+                ],
+                "summary": "Search files by filename",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Search keyword to match in filename (e.g., 'document', 'report')",
+                        "name": "query",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Files matching the search query",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/models.FileUploadRequest"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Query parameter is required",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Search operation failed",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/files/upload": {
             "post": {
-                "description": "Store a file and its embedding vector",
+                "description": "Stores a new file with its content and embedding vector. The embedding should be a vector representation of the file content for similarity search.",
                 "consumes": [
                     "application/json"
                 ],
@@ -27,7 +238,7 @@
                 "summary": "Upload a file",
                 "parameters": [
                     {
-                        "description": "Upload Input",
+                        "description": "File data including filename, content, and embedding vector",
                         "name": "file",
                         "in": "body",
                         "required": true,
@@ -38,18 +249,23 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "File uploaded successfully",
                         "schema": {
                             "$ref": "#/definitions/models.FileUploadRequest"
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request body",
                         "schema": {
                             "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Failed to create file",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     }
                 }
@@ -57,6 +273,10 @@
         },
         "/files/{id}": {
             "get": {
+                "description": "Retrieves a specific file by its UUID. Returns the complete file data including content and embedding vector.",
+                "consumes": [
+                    "application/json"
+                ],
                 "produces": [
                     "application/json"
                 ],
@@ -66,8 +286,8 @@
                 "summary": "Get file by ID",
                 "parameters": [
                     {
-                        "type": "integer",
-                        "description": "File ID",
+                        "type": "string",
+                        "description": "File UUID (e.g., 550e8400-e29b-41d4-a716-446655440000)",
                         "name": "id",
                         "in": "path",
                         "required": true
@@ -75,23 +295,36 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "File data retrieved successfully",
                         "schema": {
                             "$ref": "#/definitions/models.FileUploadRequest"
                         }
                     },
-                    "404": {
-                        "description": "Not Found",
+                    "400": {
+                        "description": "Invalid UUID format",
                         "schema": {
                             "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "File not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     }
                 }
             },
             "put": {
+                "description": "Updates an existing file's content, filename, and embedding vector. All fields in the request body will replace the existing values.",
                 "consumes": [
                     "application/json"
                 ],
@@ -104,14 +337,14 @@
                 "summary": "Update a file",
                 "parameters": [
                     {
-                        "type": "integer",
-                        "description": "File ID",
+                        "type": "string",
+                        "description": "File UUID to update",
                         "name": "id",
                         "in": "path",
                         "required": true
                     },
                     {
-                        "description": "Update Input",
+                        "description": "Updated file data",
                         "name": "file",
                         "in": "body",
                         "required": true,
@@ -122,54 +355,29 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "File updated successfully",
                         "schema": {
                             "$ref": "#/definitions/models.FileUploadRequest"
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid UUID or request body",
                         "schema": {
                             "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Update operation failed",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     }
                 }
             },
             "delete": {
-                "tags": [
-                    "files"
-                ],
-                "summary": "Delete a file",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "File ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "204": {
-                        "description": "No Content"
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/search": {
-            "post": {
+                "description": "Permanently removes a file from the database. This action cannot be undone.",
                 "consumes": [
                     "application/json"
                 ],
@@ -177,34 +385,128 @@
                     "application/json"
                 ],
                 "tags": [
-                    "search"
+                    "files"
                 ],
-                "summary": "Search similar files",
+                "summary": "Delete a file permanently",
                 "parameters": [
                     {
-                        "description": "Search Query",
-                        "name": "query",
-                        "in": "body",
-                        "required": true,
+                        "type": "string",
+                        "description": "File UUID to delete",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "File deleted successfully"
+                    },
+                    "400": {
+                        "description": "Invalid UUID format",
                         "schema": {
-                            "$ref": "#/definitions/models.SearchRequest"
+                            "type": "object",
+                            "additionalProperties": true
                         }
+                    },
+                    "500": {
+                        "description": "Delete operation failed",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/files/{id}/restore": {
+            "patch": {
+                "description": "Restores a previously soft-deleted file by setting its deleted flag back to false. The file becomes available again.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "files"
+                ],
+                "summary": "Restore a soft-deleted file",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "File UUID to restore",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "File restored successfully",
                         "schema": {
-                            "$ref": "#/definitions/models.SearchRequest"
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid UUID format",
                         "schema": {
                             "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Restore operation failed",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/files/{id}/soft-delete": {
+            "patch": {
+                "description": "Marks a file as deleted without removing it from the database. The file can be restored later using the restore endpoint.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "files"
+                ],
+                "summary": "Soft delete a file",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "File UUID to soft delete",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "File soft-deleted successfully",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid UUID format",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Soft delete operation failed",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     }
                 }
@@ -212,11 +514,35 @@
         }
     },
     "definitions": {
+        "models.FileMetadata": {
+            "description": "Lightweight file metadata for performance-optimized queries",
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "filename": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "size": {
+                    "type": "integer"
+                }
+            }
+        },
         "models.FileUploadRequest": {
             "type": "object",
             "properties": {
                 "content": {
                     "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "deleted": {
+                    "type": "boolean"
                 },
                 "embedding": {
                     "type": "array",
@@ -226,20 +552,6 @@
                 },
                 "filename": {
                     "type": "string"
-                }
-            }
-        },
-        "models.SearchRequest": {
-            "type": "object",
-            "properties": {
-                "limit": {
-                    "type": "integer"
-                },
-                "query_embedding": {
-                    "type": "array",
-                    "items": {
-                        "type": "number"
-                    }
                 }
             }
         }

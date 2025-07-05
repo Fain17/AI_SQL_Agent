@@ -8,13 +8,25 @@ package db
 import (
 	"context"
 
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/pgvector/pgvector-go"
 )
+
+const countTotalFiles = `-- name: CountTotalFiles :one
+SELECT COUNT(*) FROM files
+`
+
+func (q *Queries) CountTotalFiles(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countTotalFiles)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
 
 const createFile = `-- name: CreateFile :one
 INSERT INTO files (filename, content, embedding)
 VALUES ($1, $2, $3)
-RETURNING id, filename, content, embedding
+RETURNING id, filename, content, embedding, created_at, deleted
 `
 
 type CreateFileParams struct {
@@ -31,6 +43,8 @@ func (q *Queries) CreateFile(ctx context.Context, arg CreateFileParams) (File, e
 		&i.Filename,
 		&i.Content,
 		&i.Embedding,
+		&i.CreatedAt,
+		&i.Deleted,
 	)
 	return i, err
 }
@@ -39,62 +53,31 @@ const deleteFile = `-- name: DeleteFile :exec
 DELETE FROM files WHERE id = $1
 `
 
-func (q *Queries) DeleteFile(ctx context.Context, id int32) error {
+func (q *Queries) DeleteFile(ctx context.Context, id pgtype.UUID) error {
 	_, err := q.db.Exec(ctx, deleteFile, id)
 	return err
 }
 
-const getFile = `-- name: GetFile :one
-SELECT id, filename, content, embedding FROM files WHERE id = $1
+const getAllFiles = `-- name: GetAllFiles :many
+SELECT id, filename, content, embedding, created_at, deleted FROM files ORDER BY id DESC
 `
 
-func (q *Queries) GetFile(ctx context.Context, id int32) (File, error) {
-	row := q.db.QueryRow(ctx, getFile, id)
-	var i File
-	err := row.Scan(
-		&i.ID,
-		&i.Filename,
-		&i.Content,
-		&i.Embedding,
-	)
-	return i, err
-}
-
-const searchFiles = `-- name: SearchFiles :many
-SELECT id, filename, content, embedding, embedding <-> $1 AS distance
-FROM files
-ORDER BY embedding <-> $1
-LIMIT $2
-`
-
-type SearchFilesParams struct {
-	Embedding pgvector.Vector
-	Limit     int32
-}
-
-type SearchFilesRow struct {
-	ID        int32
-	Filename  string
-	Content   string
-	Embedding pgvector.Vector
-	Distance  interface{}
-}
-
-func (q *Queries) SearchFiles(ctx context.Context, arg SearchFilesParams) ([]SearchFilesRow, error) {
-	rows, err := q.db.Query(ctx, searchFiles, arg.Embedding, arg.Limit)
+func (q *Queries) GetAllFiles(ctx context.Context) ([]File, error) {
+	rows, err := q.db.Query(ctx, getAllFiles)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []SearchFilesRow
+	var items []File
 	for rows.Next() {
-		var i SearchFilesRow
+		var i File
 		if err := rows.Scan(
 			&i.ID,
 			&i.Filename,
 			&i.Content,
 			&i.Embedding,
-			&i.Distance,
+			&i.CreatedAt,
+			&i.Deleted,
 		); err != nil {
 			return nil, err
 		}
@@ -106,15 +89,191 @@ func (q *Queries) SearchFiles(ctx context.Context, arg SearchFilesParams) ([]Sea
 	return items, nil
 }
 
+const getDeletedFiles = `-- name: GetDeletedFiles :many
+SELECT id, filename, content, embedding, created_at, deleted FROM files WHERE deleted = TRUE ORDER BY created_at DESC
+`
+
+func (q *Queries) GetDeletedFiles(ctx context.Context) ([]File, error) {
+	rows, err := q.db.Query(ctx, getDeletedFiles)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []File
+	for rows.Next() {
+		var i File
+		if err := rows.Scan(
+			&i.ID,
+			&i.Filename,
+			&i.Content,
+			&i.Embedding,
+			&i.CreatedAt,
+			&i.Deleted,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getFile = `-- name: GetFile :one
+SELECT id, filename, content, embedding, created_at, deleted FROM files WHERE id = $1
+`
+
+func (q *Queries) GetFile(ctx context.Context, id pgtype.UUID) (File, error) {
+	row := q.db.QueryRow(ctx, getFile, id)
+	var i File
+	err := row.Scan(
+		&i.ID,
+		&i.Filename,
+		&i.Content,
+		&i.Embedding,
+		&i.CreatedAt,
+		&i.Deleted,
+	)
+	return i, err
+}
+
+const getFileMetadata = `-- name: GetFileMetadata :many
+SELECT id, filename, LENGTH(content) AS size, created_at
+FROM files
+ORDER BY created_at DESC
+`
+
+type GetFileMetadataRow struct {
+	ID        pgtype.UUID
+	Filename  string
+	Size      float64
+	CreatedAt pgtype.Timestamptz
+}
+
+func (q *Queries) GetFileMetadata(ctx context.Context) ([]GetFileMetadataRow, error) {
+	rows, err := q.db.Query(ctx, getFileMetadata)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetFileMetadataRow
+	for rows.Next() {
+		var i GetFileMetadataRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Filename,
+			&i.Size,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getFilesByDateRange = `-- name: GetFilesByDateRange :many
+SELECT id, filename, content, embedding, created_at, deleted FROM files
+WHERE created_at BETWEEN $1 AND $2
+ORDER BY created_at DESC
+`
+
+type GetFilesByDateRangeParams struct {
+	CreatedAt   pgtype.Timestamptz
+	CreatedAt_2 pgtype.Timestamptz
+}
+
+func (q *Queries) GetFilesByDateRange(ctx context.Context, arg GetFilesByDateRangeParams) ([]File, error) {
+	rows, err := q.db.Query(ctx, getFilesByDateRange, arg.CreatedAt, arg.CreatedAt_2)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []File
+	for rows.Next() {
+		var i File
+		if err := rows.Scan(
+			&i.ID,
+			&i.Filename,
+			&i.Content,
+			&i.Embedding,
+			&i.CreatedAt,
+			&i.Deleted,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getFilesByFilename = `-- name: GetFilesByFilename :many
+SELECT id, filename, content, embedding, created_at, deleted FROM files
+WHERE filename ILIKE '%' || $1 || '%'
+ORDER BY id DESC
+`
+
+func (q *Queries) GetFilesByFilename(ctx context.Context, dollar_1 pgtype.Text) ([]File, error) {
+	rows, err := q.db.Query(ctx, getFilesByFilename, dollar_1)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []File
+	for rows.Next() {
+		var i File
+		if err := rows.Scan(
+			&i.ID,
+			&i.Filename,
+			&i.Content,
+			&i.Embedding,
+			&i.CreatedAt,
+			&i.Deleted,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const softDeleteFile = `-- name: SoftDeleteFile :exec
+UPDATE files SET deleted = TRUE WHERE id = $1
+`
+
+func (q *Queries) SoftDeleteFile(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, softDeleteFile, id)
+	return err
+}
+
+const undoSoftDelete = `-- name: UndoSoftDelete :exec
+UPDATE files SET deleted = FALSE WHERE id = $1
+`
+
+func (q *Queries) UndoSoftDelete(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, undoSoftDelete, id)
+	return err
+}
+
 const updateFile = `-- name: UpdateFile :one
 UPDATE files
   SET filename = $2, content = $3, embedding = $4
 WHERE id = $1
-RETURNING id, filename, content, embedding
+RETURNING id, filename, content, embedding, created_at, deleted
 `
 
 type UpdateFileParams struct {
-	ID        int32
+	ID        pgtype.UUID
 	Filename  string
 	Content   string
 	Embedding pgvector.Vector
@@ -133,6 +292,8 @@ func (q *Queries) UpdateFile(ctx context.Context, arg UpdateFileParams) (File, e
 		&i.Filename,
 		&i.Content,
 		&i.Embedding,
+		&i.CreatedAt,
+		&i.Deleted,
 	)
 	return i, err
 }

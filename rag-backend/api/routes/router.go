@@ -17,12 +17,20 @@ func NewRouter(queries *db.Queries) *gin.Engine {
 	//Swagger Routes
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
+	fileGroup := r.Group("/files")
+
 	// CRUD + search routes
-	r.POST("/files", handlers.UploadHandler(queries))
-	r.GET("/files/:id", handlers.GetHandler(queries))
-	r.PUT("/files/:id", handlers.UpdateHandler(queries))
-	r.DELETE("/files/:id", handlers.DeleteHandler(queries))
-	r.POST("/search", handlers.SearchHandler(queries))
+	fileGroup.POST("/upload", handlers.UploadHandler(queries))
+	fileGroup.GET("/getall", handlers.GetAllHandler(queries))
+	fileGroup.GET("/search", handlers.GetFilesByFilenameHandler(queries))
+	fileGroup.GET("/date-range", handlers.GetFilesByDateRangeHandler(queries))
+	fileGroup.GET("/:id", handlers.GetHandler(queries))
+	fileGroup.PUT("/:id", handlers.UpdateHandler(queries))
+	fileGroup.DELETE("/:id", handlers.DeleteHandler(queries))
+	fileGroup.PATCH("/:id/soft-delete", handlers.SoftDeleteHandler(queries))
+	fileGroup.PATCH("/:id/restore", handlers.UndoSoftDeleteHandler(queries))
+	fileGroup.GET("/recycle-bin", handlers.GetDeletedFilesHandler(queries))
+	fileGroup.GET("/metadata", handlers.GetFileMetadataHandler(queries))
 
 	return r
 }

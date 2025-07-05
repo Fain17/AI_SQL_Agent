@@ -1,24 +1,31 @@
 basePath: /
 definitions:
+  models.FileMetadata:
+    description: Lightweight file metadata for performance-optimized queries
+    properties:
+      created_at:
+        type: string
+      filename:
+        type: string
+      id:
+        type: string
+      size:
+        type: integer
+    type: object
   models.FileUploadRequest:
     properties:
       content:
         type: string
+      created_at:
+        type: string
+      deleted:
+        type: boolean
       embedding:
         items:
           type: number
         type: array
       filename:
         type: string
-    type: object
-  models.SearchRequest:
-    properties:
-      limit:
-        type: integer
-      query_embedding:
-        items:
-          type: number
-        type: array
     type: object
 host: localhost:8080
 info:
@@ -27,73 +34,68 @@ info:
   title: RAG File Service API
   version: "1.0"
 paths:
-  /files:
-    post:
-      consumes:
-      - application/json
-      description: Store a file and its embedding vector
-      parameters:
-      - description: Upload Input
-        in: body
-        name: file
-        required: true
-        schema:
-          $ref: '#/definitions/models.FileUploadRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/models.FileUploadRequest'
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Upload a file
-      tags:
-      - files
   /files/{id}:
     delete:
+      consumes:
+      - application/json
+      description: Permanently removes a file from the database. This action cannot
+        be undone.
       parameters:
-      - description: File ID
+      - description: File UUID to delete
         in: path
         name: id
         required: true
-        type: integer
+        type: string
+      produces:
+      - application/json
       responses:
         "204":
-          description: No Content
+          description: File deleted successfully
         "400":
-          description: Bad Request
+          description: Invalid UUID format
           schema:
-            additionalProperties:
-              type: string
+            additionalProperties: true
             type: object
-      summary: Delete a file
+        "500":
+          description: Delete operation failed
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Delete a file permanently
       tags:
       - files
     get:
+      consumes:
+      - application/json
+      description: Retrieves a specific file by its UUID. Returns the complete file
+        data including content and embedding vector.
       parameters:
-      - description: File ID
+      - description: File UUID (e.g., 550e8400-e29b-41d4-a716-446655440000)
         in: path
         name: id
         required: true
-        type: integer
+        type: string
       produces:
       - application/json
       responses:
         "200":
-          description: OK
+          description: File data retrieved successfully
           schema:
             $ref: '#/definitions/models.FileUploadRequest'
-        "404":
-          description: Not Found
+        "400":
+          description: Invalid UUID format
           schema:
-            additionalProperties:
-              type: string
+            additionalProperties: true
+            type: object
+        "404":
+          description: File not found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties: true
             type: object
       summary: Get file by ID
       tags:
@@ -101,13 +103,15 @@ paths:
     put:
       consumes:
       - application/json
+      description: Updates an existing file's content, filename, and embedding vector.
+        All fields in the request body will replace the existing values.
       parameters:
-      - description: File ID
+      - description: File UUID to update
         in: path
         name: id
         required: true
-        type: integer
-      - description: Update Input
+        type: string
+      - description: Updated file data
         in: body
         name: file
         required: true
@@ -117,45 +121,268 @@ paths:
       - application/json
       responses:
         "200":
-          description: OK
+          description: File updated successfully
           schema:
             $ref: '#/definitions/models.FileUploadRequest'
         "400":
-          description: Bad Request
+          description: Invalid UUID or request body
           schema:
-            additionalProperties:
-              type: string
+            additionalProperties: true
+            type: object
+        "500":
+          description: Update operation failed
+          schema:
+            additionalProperties: true
             type: object
       summary: Update a file
       tags:
       - files
-  /search:
-    post:
+  /files/{id}/restore:
+    patch:
       consumes:
       - application/json
+      description: Restores a previously soft-deleted file by setting its deleted
+        flag back to false. The file becomes available again.
       parameters:
-      - description: Search Query
-        in: body
-        name: query
+      - description: File UUID to restore
+        in: path
+        name: id
         required: true
-        schema:
-          $ref: '#/definitions/models.SearchRequest'
+        type: string
       produces:
       - application/json
       responses:
         "200":
-          description: OK
+          description: File restored successfully
           schema:
-            $ref: '#/definitions/models.SearchRequest'
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties:
-              type: string
+            additionalProperties: true
             type: object
-      summary: Search similar files
+        "400":
+          description: Invalid UUID format
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Restore operation failed
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Restore a soft-deleted file
       tags:
-      - search
+      - files
+  /files/{id}/soft-delete:
+    patch:
+      consumes:
+      - application/json
+      description: Marks a file as deleted without removing it from the database.
+        The file can be restored later using the restore endpoint.
+      parameters:
+      - description: File UUID to soft delete
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: File soft-deleted successfully
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid UUID format
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Soft delete operation failed
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Soft delete a file
+      tags:
+      - files
+  /files/date-range:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves files created within the specified date range. Both start
+        and end dates are inclusive.
+      parameters:
+      - description: Start date in YYYY-MM-DD format (e.g., 2024-01-01)
+        in: query
+        name: start
+        required: true
+        type: string
+      - description: End date in YYYY-MM-DD format (e.g., 2024-12-31)
+        in: query
+        name: end
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Files created within the date range
+          schema:
+            items:
+              $ref: '#/definitions/models.FileUploadRequest'
+            type: array
+        "400":
+          description: Invalid date format
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Failed to retrieve files by date
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get files within a date range
+      tags:
+      - files
+  /files/getall:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves all files from the database. Returns a list of all files
+        with their content and embeddings.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of all files
+          schema:
+            items:
+              $ref: '#/definitions/models.FileUploadRequest'
+            type: array
+        "404":
+          description: No files found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get all files
+      tags:
+      - files
+  /files/metadata:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves lightweight metadata for all files including ID, filename,
+        size, and creation date. Does not include file content or embeddings for performance.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of file metadata
+          schema:
+            items:
+              $ref: '#/definitions/models.FileMetadata'
+            type: array
+        "500":
+          description: Failed to get metadata
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get lightweight file metadata
+      tags:
+      - files
+  /files/recycle-bin:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves all files that have been soft-deleted (moved to recycle
+        bin). These files can be restored or permanently deleted.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of soft-deleted files
+          schema:
+            items:
+              $ref: '#/definitions/models.FileUploadRequest'
+            type: array
+        "500":
+          description: Failed to fetch deleted files
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get all soft-deleted files
+      tags:
+      - files
+  /files/search:
+    get:
+      consumes:
+      - application/json
+      description: Searches for files whose filename contains the specified query
+        string. Case-sensitive search.
+      parameters:
+      - description: Search keyword to match in filename (e.g., 'document', 'report')
+        in: query
+        name: query
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Files matching the search query
+          schema:
+            items:
+              $ref: '#/definitions/models.FileUploadRequest'
+            type: array
+        "400":
+          description: Query parameter is required
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Search operation failed
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Search files by filename
+      tags:
+      - files
+  /files/upload:
+    post:
+      consumes:
+      - application/json
+      description: Stores a new file with its content and embedding vector. The embedding
+        should be a vector representation of the file content for similarity search.
+      parameters:
+      - description: File data including filename, content, and embedding vector
+        in: body
+        name: file
+        required: true
+        schema:
+          $ref: '#/definitions/models.FileUploadRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: File uploaded successfully
+          schema:
+            $ref: '#/definitions/models.FileUploadRequest'
+        "400":
+          description: Invalid request body
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Failed to create file
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Upload a file
+      tags:
+      - files
 schemes:
 - http
 swagger: "2.0"

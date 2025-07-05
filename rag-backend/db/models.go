@@ -5,12 +5,15 @@
 package db
 
 import (
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/pgvector/pgvector-go"
 )
 
 type File struct {
-	ID        int32
+	ID        pgtype.UUID
 	Filename  string
 	Content   string
 	Embedding pgvector.Vector
+	CreatedAt pgtype.Timestamptz
+	Deleted   pgtype.Bool
 }

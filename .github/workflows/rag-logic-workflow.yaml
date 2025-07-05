@@ -1,0 +1,35 @@
+name: RAG Backend CI/CD to GHCR
+
+on:
+  push:
+    branches:
+      - develop
+    paths:
+      - 'rag-logic/**'
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    environment: develop  # 🔹 This links to the GitHub Environment named 'develop'
+
+    permissions:
+      contents: read
+      packages: write  # Required to push to GHCR
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry (GHCR)
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Build with DATABASE_URL
+        run: |
+          docker build \
+            --build-arg DATABASE_URL="${{ secrets.DATABASE_URL }}" \
+            -t ghcr.io/fain17/ai_rag_agent/rag-logic:dev \
+            ./rag-logic
+
+      - name: Push Docker image to GHCR
+        run: docker push ghcr.io/fain17/ai_rag_agent/rag-logic:dev
